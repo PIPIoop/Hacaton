@@ -5,6 +5,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
+import os
+
+# Каталогу, для хранения данных профиля: "chrome_profile"
+profile_path = os.path.join(os.getcwd(), "chrome_profile")
 
 # Автоматическая установка ChromeDriver
 service = Service(ChromeDriverManager().install())
@@ -16,76 +20,47 @@ options = webdriver.ChromeOptions()
 options.add_argument(f"user-agent={FIXED_USER_AGENT}")
 options.add_argument("--start-maximized")  # Запуск в полноэкранном режиме
 
+# Используем постоянное хранилище профиля
+options.add_argument(f"--user-data-dir={profile_path}")
 
 # Инициализация драйвера
 driver = webdriver.Chrome(service=service, options=options)
 
 # Открываем WhatsApp Web
 driver.get("https://web.whatsapp.com")
-print("Отсканируйте QR-код в течение 30 секунд...")
+print("Если это первый запуск, отсканируйте QR-код. В последующих запусках авторизация будет сохранена.")
 
-
-#try:
- #  button = WebDriverWait(driver,20 ).until(
-  #      EC.presence_of_element_located((By.XPATH, '/html/body/div[1]/div/div/span[2]/div/div/div/div/div/div/div[2]/div/button/div/div")]'))
-   # )
-   #button.click()
-#except Exception as e:
- #   print("Кнопка не найдена:", e)
-input("НАЖМИТЕ Enter, после авторизации")
-
-# Ожидание авторизации (ручное сканирование QR)
+# Если сессия уже сохранена, можно добавить ожидание для загрузки чатов
 try:
-    # Ждем появления списка чатов
+    # Ждем появления списка чатов (или любого другого элемента, свидетельствующего об авторизации)
     WebDriverWait(driver, 30).until(
         EC.presence_of_element_located((By.XPATH, '//div[@role="listitem"]'))
     )
-except:
-    print("Авторизация не выполнена!")
+except Exception as e:
+    print("Ошибка при ожидании загрузки чатов:", e)
     driver.quit()
     exit()
 
-
-contact_name=input("Введите пользователя")
-
+contact_name = input("Введите пользователя: ")
 
 try:
-    chat=WebDriverWait(driver,20).until(
-        EC.element_to_be_clickable((By.XPATH,f'//span[contains(@title,"{contact_name}")]'))
+    chat = WebDriverWait(driver, 20).until(
+        EC.element_to_be_clickable((By.XPATH, f'//span[contains(@title,"{contact_name}")]'))
     )
     chat.click()
-    print(f"Чат с '{contact_name} открыт'")
+    print(f"Чат с '{contact_name}' открыт")
 except Exception as e:
     raise Exception(f"Чат с {contact_name} не найден {str(e)}.")
 
-
-
-
+# Ожидаем загрузку сообщений
 try:
-    chat = driver.find_element(
-        By.XPATH,
-        f'//span[@title="{contact_name}"]'
-    )
-    chat.click()
-except:
-    print(f"Чат с '{contact_name}' не найден!")
-    driver.quit()
-    exit()
-
-# Получаем сообщения
-try:
-    # Ждем загрузки сообщений
     WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.XPATH, '//div[@role="application"]'))
     )
+    # Собираем все сообщения
+    messages = driver.find_elements(By.XPATH, '//div[contains(@class, "copyable-text")]')
 
-  # Собираем все сообщения
-    messages = driver.find_elements(
-       By.XPATH,
-       '//div[contains(@class, "copyable-text")]'
-    )
-
-  # Выводим текст сообщений
+    # Выводим текст сообщений
     for i, msg in enumerate(messages, 1):
         print(f"{i}. {msg.text}")
 
