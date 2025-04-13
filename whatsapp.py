@@ -58,7 +58,7 @@ except Exception as e:
     print("Контейнер сообщений не найден:", e)
     driver.quit()
     exit()
-
+#Учебный чат Прогресс Агро
 # Прокручиваем чат вверх, пока не загрузятся все сообщения
 old_message_count = 0
 while True:
@@ -74,9 +74,17 @@ while True:
 # Регулярное выражение для извлечения времени (например, [12:34, ...])
 time_pattern = re.compile(r"\[(\d{1,2}:\d{2}),")
 
-# Собираем все сообщения уже после полной загрузки
+# Собираем все сообщения после полной загрузки
 messages = driver.find_elements(By.XPATH, '//div[contains(@class, "copyable-text")]')
 print(f"\nНайдено сообщений: {len(messages)}\n")
+
+# Список слов для фильтрации, которые заданы прямо в коде (без ввода с консоли)
+filter_words = ["га", "аор", "тск", "мир", "восход", "ао кропоткинское",
+                "колхоз прогресс", "сп коломейцево", "по", "отд"]
+
+# Фильтрация сообщений:
+# Для каждого фильтруемого слова создаётся регулярное выражение с границами слова (\b) для точного сопоставления.
+filtered_count = 0
 for i, msg in enumerate(messages, 1):
     msg_text = msg.text
     pre_text = msg.get_attribute("data-pre-plain-text")
@@ -85,8 +93,24 @@ for i, msg in enumerate(messages, 1):
         match = time_pattern.search(pre_text)
         if match:
             time_str = match.group(1)
-    # Вывод с разделением времени и текста сообщения на разные строки
-    print(f"{i}. Время: {time_str}\nСообщение:\n{msg_text}\n")
+
+    msg_text_lower = msg_text.lower()
+
+    # Проверяем наличие хотя бы одного фильтруемого слова как целого слова в тексте
+    match_found = False
+    for word in filter_words:
+        # Формируем регулярное выражение для точного поиска
+        pattern = r"\b" + re.escape(word) + r"\b"
+        if re.search(pattern, msg_text_lower):
+            match_found = True
+            break
+
+    if match_found:
+        filtered_count += 1
+        print(f"{filtered_count}. Время: {time_str}\nСообщение:\n{msg_text}\n")
+
+if filtered_count == 0:
+    print("Сообщения, содержащие заданные слова, не найдены.")
 
 # Закрываем браузер через 5 секунд
 time.sleep(5)
