@@ -8,27 +8,23 @@ import time
 import os
 import re
 
-# Указываем путь к каталогу для сохранения данных профиля
+# Путь к сохранённому профилю
 profile_path = os.path.join(os.getcwd(), "chrome_profile")
 
-# Автоматическая установка ChromeDriver
+# Настройка драйвера
 service = Service(ChromeDriverManager().install())
-
 FIXED_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-# Настройка Chrome
 options = webdriver.ChromeOptions()
 options.add_argument(f"user-agent={FIXED_USER_AGENT}")
 options.add_argument("--start-maximized")
 options.add_argument(f"--user-data-dir={profile_path}")
 
 driver = webdriver.Chrome(service=service, options=options)
-
-# Открываем WhatsApp Web
 driver.get("https://web.whatsapp.com")
 print("Если это первый запуск, отсканируйте QR-код. В последующих запусках авторизация будет сохранена.")
 
-# Ожидание загрузки списка чатов, что говорит об авторизации
+# Ожидание авторизации
 try:
     WebDriverWait(driver, 30).until(
         EC.presence_of_element_located((By.XPATH, '//div[@role="listitem"]'))
@@ -49,7 +45,7 @@ try:
 except Exception as e:
     raise Exception(f"Чат с {contact_name} не найден. {str(e)}")
 
-# Ожидание загрузки контейнера сообщений (области, где располагаются сообщения)
+# Ожидание появления контейнера чата
 try:
     chat_container = WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "copyable-area")]'))
@@ -59,7 +55,7 @@ except Exception as e:
     driver.quit()
     exit()
 
-# Прокручиваем чат вверх, пока не загрузятся все сообщения
+# Прокрутка вверх для загрузки истории
 old_message_count = 0
 while True:
     messages = driver.find_elements(By.XPATH, '//div[contains(@class, "copyable-text")]')
@@ -71,19 +67,21 @@ while True:
     time.sleep(2)
 
 # Регулярки
-time_pattern = re.compile(r"\[(\d{1,2}:\d{2}),")
+pre_text_pattern = re.compile(r"\[(\d{1,2}:\d{2}), (\d{1,2}\.\d{1,2}\.\d{4})] (.*?):")
+
 quote_text_pattern = re.compile(r'^\[\d{1,2}:\d{2}, \d{2}\.\d{2}\.\d{4}] .+?:')
 
-# Слова для фильтрации
-filter_words = ["попу","аор", "тск", "мир", "восход", "ао кропоткинское",
+# Слова для фильтра
+filter_words = ["попу", "аор", "тск", "мир", "восход", "ао кропоткинское",
                 "колхоз прогресс", "сп коломейцево", "пу", "отд"]
 
+# Сбор сообщений
 messages = driver.find_elements(By.XPATH, '//div[contains(@class, "copyable-text")]')
 print(f"\nНайдено сообщений: {len(messages)}\n")
 
 filtered_count = 0
 for msg in messages:
-    # 1. DOM-цитата
+    # Убираем цитаты (DOM)
     try:
         msg.find_element(By.XPATH, './/div[contains(@data-testid, "quoted-message")]')
         continue
@@ -91,28 +89,29 @@ for msg in messages:
         pass
 
     msg_text = msg.text.strip()
-
-    #Проверка на "Вы" и дата в следующей строке
     lines = msg_text.splitlines()
-    if len(lines) >= 2:
-        if lines[0].strip() == "Вы" and re.match(r'^\d{1,2}\.\d{1,2}$', lines[1].strip()):
-            continue
 
-    #Проверка на встроенную цитату
+    # Убираем ручные цитаты
+    if len(lines) >= 2 and lines[0].strip() == "Вы" and re.match(r'^\d{1,2}\.\d{1,2}$', lines[1].strip()):
+        continue
+
     if any(quote_text_pattern.match(line.strip()) for line in lines):
         continue
 
-    # Проверка фильтрации по словам
+    # Проверка слов
     msg_text_lower = msg_text.lower()
     if any(re.search(rf"\b{re.escape(word)}\b", msg_text_lower) for word in filter_words):
         pre_text = msg.get_attribute("data-pre-plain-text")
-        time_str = ""
+        time_str, date_str, sender = "", "", ""
         if pre_text:
-            match = time_pattern.search(pre_text)
+            match = pre_text_pattern.search(pre_text)
             if match:
                 time_str = match.group(1)
+                date_str = match.group(2)
+                sender = match.group(3)
+
         filtered_count += 1
-        print(f"{filtered_count}. Время: {time_str}\nСообщение:\n{msg_text}\n")
+        print(f"{filtered_count}. Отправитель: {sender}\nДата: {date_str} {time_str}\nСообщение:\n{msg_text}\n")
 
 if filtered_count == 0:
     print("Сообщения, содержащие заданные слова, не найдены.")
