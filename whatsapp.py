@@ -58,60 +58,64 @@ except Exception as e:
     print("Контейнер сообщений не найден:", e)
     driver.quit()
     exit()
-#Учебный чат Прогресс Агро
+
 # Прокручиваем чат вверх, пока не загрузятся все сообщения
 old_message_count = 0
 while True:
     messages = driver.find_elements(By.XPATH, '//div[contains(@class, "copyable-text")]')
     current_count = len(messages)
     if current_count == old_message_count:
-        break  # Больше новых сообщений не подгружается
+        break
     old_message_count = current_count
-    # Прокручиваем контейнер вверх
     driver.execute_script("arguments[0].scrollTop = 0;", chat_container)
-    time.sleep(2)  # Ждём подгрузки новых сообщений
+    time.sleep(2)
 
-# Регулярное выражение для извлечения времени (например, [12:34, ...])
+# Регулярки
 time_pattern = re.compile(r"\[(\d{1,2}:\d{2}),")
+quote_text_pattern = re.compile(r'^\[\d{1,2}:\d{2}, \d{2}\.\d{2}\.\d{4}] .+?:')
 
-# Собираем все сообщения после полной загрузки
+# Слова для фильтрации
+filter_words = ["попу","аор", "тск", "мир", "восход", "ао кропоткинское",
+                "колхоз прогресс", "сп коломейцево", "пу", "отд"]
+
 messages = driver.find_elements(By.XPATH, '//div[contains(@class, "copyable-text")]')
 print(f"\nНайдено сообщений: {len(messages)}\n")
 
-# Список слов для фильтрации, которые заданы прямо в коде (без ввода с консоли)
-filter_words = ["га", "аор", "тск", "мир", "восход", "ао кропоткинское",
-                "колхоз прогресс", "сп коломейцево", "по", "отд"]
-
-# Фильтрация сообщений:
-# Для каждого фильтруемого слова создаётся регулярное выражение с границами слова (\b) для точного сопоставления.
 filtered_count = 0
-for i, msg in enumerate(messages, 1):
-    msg_text = msg.text
-    pre_text = msg.get_attribute("data-pre-plain-text")
-    time_str = ""
-    if pre_text:
-        match = time_pattern.search(pre_text)
-        if match:
-            time_str = match.group(1)
+for msg in messages:
+    # 1. DOM-цитата
+    try:
+        msg.find_element(By.XPATH, './/div[contains(@data-testid, "quoted-message")]')
+        continue
+    except:
+        pass
 
+    msg_text = msg.text.strip()
+
+    #Проверка на "Вы" и дата в следующей строке
+    lines = msg_text.splitlines()
+    if len(lines) >= 2:
+        if lines[0].strip() == "Вы" and re.match(r'^\d{1,2}\.\d{1,2}$', lines[1].strip()):
+            continue
+
+    #Проверка на встроенную цитату
+    if any(quote_text_pattern.match(line.strip()) for line in lines):
+        continue
+
+    # Проверка фильтрации по словам
     msg_text_lower = msg_text.lower()
-
-    # Проверяем наличие хотя бы одного фильтруемого слова как целого слова в тексте
-    match_found = False
-    for word in filter_words:
-        # Формируем регулярное выражение для точного поиска
-        pattern = r"\b" + re.escape(word) + r"\b"
-        if re.search(pattern, msg_text_lower):
-            match_found = True
-            break
-
-    if match_found:
+    if any(re.search(rf"\b{re.escape(word)}\b", msg_text_lower) for word in filter_words):
+        pre_text = msg.get_attribute("data-pre-plain-text")
+        time_str = ""
+        if pre_text:
+            match = time_pattern.search(pre_text)
+            if match:
+                time_str = match.group(1)
         filtered_count += 1
         print(f"{filtered_count}. Время: {time_str}\nСообщение:\n{msg_text}\n")
 
 if filtered_count == 0:
     print("Сообщения, содержащие заданные слова, не найдены.")
 
-# Закрываем браузер через 5 секунд
 time.sleep(5)
 driver.quit()
