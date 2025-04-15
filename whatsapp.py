@@ -55,7 +55,7 @@ except Exception as e:
     driver.quit()
     exit()
 
-# Прокрутка вверх для загрузки истории
+# Прокрутка вверх для загрузки истории (через раз работает(лучше руками))
 old_message_count = 0
 while True:
     messages = driver.find_elements(By.XPATH, '//div[contains(@class, "copyable-text")]')
@@ -111,7 +111,10 @@ for msg in messages:
                 sender = match.group(3)
 
         filtered_count += 1
-        print(f"{filtered_count}. Отправитель: {sender}\nДата: {date_str} {time_str}\nСообщение:\n{msg_text}\n")
+        # Убираем символы перевода строки, заменяя их пробелами
+        msg_single_line = " ".join(msg_text.splitlines())
+        print(f"{filtered_count}. Отправитель: {sender} | Дата: {date_str} {time_str} | Сообщение: {msg_single_line}")
+
 
 if filtered_count == 0:
     print("Сообщения, содержащие заданные слова, не найдены.")
